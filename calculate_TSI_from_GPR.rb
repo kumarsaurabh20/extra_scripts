@@ -1,11 +1,48 @@
 class ReadGpr
 
 require 'rinruby'
+require 'csv'
 
 class NoGprError < StandardError
 end
 
-def readGpr(file_path)
+ #This method handles replicate .gpr files. The method reads individual replicate along with main gpr by applying
+ #readGpr method. It stores the calculates TSI and names in separate arrays. The names array carries same probe names.
+ #But the TSI has different intensities and the TSI array stores it as a 2D array. Each element of TSI has a calculated
+ # TSI of replicate. Then the method apply transpose function to carry same probe values in a single elemnet. After this
+ #step the negataive numbers are converted to zero and then airthmatic mean is applied to all elements of a individual
+ #element of TSI array. if [0,0,0] the 0/3 gives us 0. if [0,0,24] then 24/3 gives 8. In other way it provides a kind of 
+ # negative weight for a negative or zero value of a probe in a replicate. if [1, 21, 101] then 123/3 = 41
+ def add_replicates
+
+     #create path variable
+     path = File.join("/home/jarvis","test_app","extra_scripts")
+
+     files = Dir["#{path}/*.gpr"]
+     dummynames = Array.new
+     dummyTSI   = Array.new
+
+     files.each_with_index do |file, i|
+       dummynames[i], dummyTSI[i] = readGpr(file)
+     end   
+
+     tsi_container = dummyTSI.transpose
+     tsi_container.map! {|e| e.map! {|f| f < 0? 0 : f}}
+     tsi_container.map! {|e| e.inject(:+)/e.size}
+
+     names_container = dummynames[0]
+
+       
+        
+    puts tsi_container.to_s
+    puts names_container.to_s
+
+    puts tsi_container.size
+    puts names_container.size
+
+ end 
+
+ def readGpr(file_path)
   
   read_array, header_removed = [], []
    begin
@@ -32,14 +69,21 @@ def readGpr(file_path)
               @name, @dia, @f633_mean, @b633_mean = getColumns(column_based_array)
               @probeNames, @tsiList = calTotalSignalIntensity(@name, @dia, @f633_mean, @b633_mean)              
               #@probeNames, @tsiList = sortGprTsiList(@name, @get_tsi_list)
-              puts "#{@probeNames}"
-              puts "#{@tsiList}"
+              #puts "#{@probeNames}"
+              #puts "#{@tsiList}"
+
+              #dummy = Array.new
+              #for i in 0..@probeNames.size              
+              #   dummy.push("#{@probeNames[i]}\t#{@tsiList[i]}")
+              #end
               
-              #puts "#{@name}"
-  
+              #dummy2 = dummy.map {|e| e.split.to_a}           
+              #send_file("output_tsi_list.csv", dummy2)
+
+              return @probeNames, @tsiList
+               
     rescue Exception => e
-              e.message
-              e.backtrace.inspect
+              puts "something went wrong :##" + e.message.to_s + e.backtrace.to_s
     end 
 
  end 
@@ -204,7 +248,20 @@ def readGpr(file_path)
 	   return dummy 
 	 end
 
+   def send_file(filename, arg=[])
+     #data = args.join(',').split(',')
+     file = CSV.generate do |line|
+        arg.each do |element|
+        line << element
+        end
+     end
+
+   File.open(filename, "w+") {|e| e.puts(file)}
+  end
+
+
 end
 
 readgpr = ReadGpr.new
-readgpr.readGpr("convert.gpr")
+#readgpr.readGpr("P_Chienti_4_10061160.gpr")
+readgpr.add_replicates
